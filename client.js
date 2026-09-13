@@ -90,12 +90,31 @@ window.__ModuleLoader__.load({
       const [needReload, setNeedReload] = useState(false)
       const [copied, setCopied] = useState(false)
       const [togglingId, setTogglingId] = useState(null)
+      // 新手向导状态
+      const [onboardingOpen, setOnboardingOpen] = useState(false)
+      const [onboardingStep, setOnboardingStep] = useState(1)
       // 确认重载弹窗状态
       const [reloadModal, setReloadModal] = useState({
         open: false,
         pluginName: '',
         actionText: '',
       })
+
+      useEffect(() => {
+        try {
+          if (!localStorage.getItem('jackdsh_onboarding_v1')) {
+            setOnboardingOpen(true)
+          }
+        } catch {}
+      }, [])
+
+      const closeOnboarding = () => {
+        try {
+          localStorage.setItem('jackdsh_onboarding_v1', 'true')
+        } catch {}
+        setOnboardingOpen(false)
+        setOnboardingStep(1)
+      }
 
       const loadState = () => {
         fetch('/api/jack-plugins/status')
@@ -369,24 +388,51 @@ window.__ModuleLoader__.load({
             )
           ),
           h(
-            'button',
-            {
-              style: {
-                background: copied ? '#ecfdf5' : '#ffffff',
-                color: copied ? '#15803d' : '#334155',
-                border: `1px solid ${copied ? '#86efac' : '#cbd5e1'}`,
-                padding: '6px 14px',
-                borderRadius: '6px',
-                fontSize: '12px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
-                transition: 'all 0.15s',
+            'div',
+            { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+            h(
+              'button',
+              {
+                style: {
+                  background: '#ffffff',
+                  color: '#0f172a',
+                  border: '1px solid #cbd5e1',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                  transition: 'all 0.15s',
+                },
+                onClick: () => {
+                  setOnboardingStep(1)
+                  setOnboardingOpen(true)
+                },
               },
-              onClick: handleCopyReport,
-            },
-            copied ? '✓ 已复制诊断信息' : '复制系统与插件信息'
+              '💡 新手向导'
+            ),
+            h(
+              'button',
+              {
+                style: {
+                  background: copied ? '#ecfdf5' : '#ffffff',
+                  color: copied ? '#15803d' : '#334155',
+                  border: `1px solid ${copied ? '#86efac' : '#cbd5e1'}`,
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                  transition: 'all 0.15s',
+                },
+                onClick: handleCopyReport,
+              },
+              copied ? '✓ 已复制诊断信息' : '复制系统与插件信息'
+            )
           )
         ),
 
@@ -891,6 +937,335 @@ window.__ModuleLoader__.load({
                     onClick: () => window.location.reload(),
                   },
                   '确定并立即刷新 (0.3s)'
+                )
+              )
+            )
+          ),
+
+        // 6. 新手引导向导 (Onboarding Wizard)
+        onboardingOpen &&
+          h(
+            'div',
+            {
+              style: {
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0, 0, 0, 0.55)',
+                backdropFilter: 'blur(6px)',
+                zIndex: 999999,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              },
+            },
+            h(
+              'div',
+              {
+                className: 'jpd-modal-content',
+                style: {
+                  background: '#ffffff',
+                  borderRadius: '16px',
+                  padding: '28px 32px 24px',
+                  width: '480px',
+                  maxWidth: '92vw',
+                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '20px',
+                },
+              },
+              // 步骤指示器
+              h(
+                'div',
+                {
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  },
+                },
+                h(
+                  'span',
+                  {
+                    style: {
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      color: '#3b82f6',
+                      letterSpacing: '0.05em',
+                    },
+                  },
+                  `新手向导 · 第 ${onboardingStep} 步 / 共 3 步`
+                ),
+                h(
+                  'div',
+                  { style: { display: 'flex', gap: '6px' } },
+                  [1, 2, 3].map((step) =>
+                    h('div', {
+                      key: step,
+                      style: {
+                        width: step === onboardingStep ? '20px' : '6px',
+                        height: '6px',
+                        borderRadius: '3px',
+                        background: step === onboardingStep ? '#3b82f6' : '#e2e8f0',
+                        transition: 'all 0.2s',
+                      },
+                    })
+                  )
+                )
+              ),
+
+              // Step 1: 欢迎与底座内核
+              onboardingStep === 1 &&
+                h(
+                  'div',
+                  { style: { display: 'flex', flexDirection: 'column', gap: '14px' } },
+                  h(
+                    'div',
+                    { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
+                    h('span', { style: { fontSize: '28px' } }, '🚀'),
+                    h(
+                      'div',
+                      null,
+                      h(
+                        'div',
+                        {
+                          style: {
+                            fontSize: '18px',
+                            fontWeight: '700',
+                            color: '#0f172a',
+                          },
+                        },
+                        '欢迎使用 JackDSH'
+                      ),
+                      h(
+                        'div',
+                        { style: { fontSize: '13px', color: '#64748b' } },
+                        '开箱即用的 DeepSeek Harness 桌面工作台'
+                      )
+                    )
+                  ),
+                  h(
+                    'div',
+                    {
+                      style: {
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '10px',
+                        padding: '12px 16px',
+                        fontSize: '13px',
+                        color: '#334155',
+                        lineHeight: '1.6',
+                      },
+                    },
+                    h('div', null, '• 底座内核：官方 DeepSeek Harness (0.1.2-rc.1)'),
+                    h('div', null, '• 客户端版本：JackDSH 发行版 (内置开箱即用插件)'),
+                    h('div', null, '• 数据存储：100% 本地专有存储，绝不上云，不占 iCloud 同步空间。')
+                  )
+                ),
+
+              // Step 2: 浏览器自动化 (腾讯 BrowserSkill)
+              onboardingStep === 2 &&
+                h(
+                  'div',
+                  { style: { display: 'flex', flexDirection: 'column', gap: '14px' } },
+                  h(
+                    'div',
+                    { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
+                    h('span', { style: { fontSize: '28px' } }, '🌐'),
+                    h(
+                      'div',
+                      null,
+                      h(
+                        'div',
+                        {
+                          style: {
+                            fontSize: '18px',
+                            fontWeight: '700',
+                            color: '#0f172a',
+                          },
+                        },
+                        '智能浏览器自动化 (BrowserSkill)'
+                      ),
+                      h(
+                        'div',
+                        { style: { fontSize: '13px', color: '#64748b' } },
+                        '让 AI Agent 帮你自动打开网页、查询资料与抓取内容'
+                      )
+                    )
+                  ),
+                  h(
+                    'div',
+                    {
+                      style: {
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '10px',
+                        padding: '12px 16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px',
+                        fontSize: '13px',
+                        color: '#334155',
+                      },
+                    },
+                    h(
+                      'div',
+                      null,
+                      '配合 Chrome 或 Edge 浏览器的官方扩展使用（两步即可连接）：'
+                    ),
+                    h(
+                      'div',
+                      {
+                        style: {
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          background: '#ffffff',
+                          border: '1px solid #cbd5e1',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                        },
+                      },
+                      h(
+                        'span',
+                        { style: { fontSize: '12.5px', fontWeight: '500' } },
+                        '1. 安装腾讯官方 BrowserSkill 扩展'
+                      ),
+                      h(
+                        'button',
+                        {
+                          style: {
+                            background: '#3b82f6',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '4px 10px',
+                            borderRadius: '4px',
+                            fontSize: '11.5px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                          },
+                          onClick: () =>
+                            window.open(
+                              'https://chromewebstore.google.com/detail/browserskill/ehajafkocogpnknpfgfkdmffhmpkhlca',
+                              '_blank'
+                            ),
+                        },
+                        '前往商店 ↗'
+                      )
+                    ),
+                    h(
+                      'div',
+                      { style: { fontSize: '12px', color: '#64748b' } },
+                      '2. 在浏览器扩展图标中点击「开启连接」，即可与本地 Agent 完成配对。'
+                    )
+                  )
+                ),
+
+              // Step 3: 手机遥控与插件矩阵
+              onboardingStep === 3 &&
+                h(
+                  'div',
+                  { style: { display: 'flex', flexDirection: 'column', gap: '14px' } },
+                  h(
+                    'div',
+                    { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
+                    h('span', { style: { fontSize: '28px' } }, '📱'),
+                    h(
+                      'div',
+                      null,
+                      h(
+                        'div',
+                        {
+                          style: {
+                            fontSize: '18px',
+                            fontWeight: '700',
+                            color: '#0f172a',
+                          },
+                        },
+                        '局域网手机遥控与插件大盘'
+                      ),
+                      h(
+                        'div',
+                        { style: { fontSize: '13px', color: '#64748b' } },
+                        '多端协同，全矩阵能力开箱即用'
+                      )
+                    )
+                  ),
+                  h(
+                    'div',
+                    {
+                      style: {
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '10px',
+                        padding: '12px 16px',
+                        fontSize: '13px',
+                        color: '#334155',
+                        lineHeight: '1.6',
+                      },
+                    },
+                    h('div', null, '• 手机遥控：同一 Wi-Fi 下扫码，随时在移动设备查看进度与发消息。'),
+                    h('div', null, '• 插件大盘：已预装 17 款核心插件，可在设置中随时按需开启或关闭。'),
+                    h('div', null, '• 随时重温：任何时候可在「插件大盘」点击右上角重新查看新手向导。')
+                  )
+                ),
+
+              // 底部导航按钮
+              h(
+                'div',
+                {
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginTop: '8px',
+                  },
+                },
+                // 左侧跳过按钮
+                h(
+                  'button',
+                  {
+                    style: {
+                      background: 'transparent',
+                      color: '#64748b',
+                      border: 'none',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      padding: '6px 8px',
+                    },
+                    onClick: closeOnboarding,
+                  },
+                  onboardingStep === 2 ? '跳过，稍后配置' : '跳过向导'
+                ),
+                // 右侧下一步 / 完成按钮
+                h(
+                  'button',
+                  {
+                    style: {
+                      background: onboardingStep === 3 ? '#10b981' : '#2563eb',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '8px 20px',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.15)',
+                    },
+                    onClick: () => {
+                      if (onboardingStep < 3) {
+                        setOnboardingStep(onboardingStep + 1)
+                      } else {
+                        closeOnboarding()
+                      }
+                    },
+                  },
+                  onboardingStep === 3 ? '开启 JackDSH 之旅 🚀' : '下一步 ➔'
                 )
               )
             )
