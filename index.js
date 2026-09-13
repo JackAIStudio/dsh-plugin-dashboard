@@ -1,12 +1,15 @@
 import { Buffer } from 'node:buffer'
-import { collectDashboardState, togglePluginState } from './dashboard.js'
+import { collectDashboardState, togglePluginState, exportModelProfile, importModelProfile } from './dashboard.js'
 
 export const name = 'dsh-plugin-dashboard'
 export const inject = ['webServer']
 
 const STATUS_ROUTE = '/api/jack-plugins/status'
 const TOGGLE_ROUTE = '/api/jack-plugins/toggle'
+const EXPORT_ROUTE = '/api/jack-plugins/export-profile'
+const IMPORT_ROUTE = '/api/jack-plugins/import-profile'
 const BODY_LIMIT = 4096
+const IMPORT_BODY_LIMIT = 1024 * 1024 // 1MB 限制
 
 function isLoopbackAddress(addr) {
   if (!addr) return false
@@ -109,5 +112,56 @@ export function apply(ctx) {
         }
       },
     }), 'dsh-plugin-dashboard: toggle route')
+
+    // 3. 导出模型与凭据全量配置包
+    ctx.effect(() => webServer.register({
+      kind: 'exact',
+      path: EXPORT_ROUTE,
+      handler: (req, res) => {
+        if (rejectUnlessLocal(req, res)) return
+        if (req.method !== 'GET') {
+          res.setHeader('allow', 'GET')
+          sendJson(res, 405, { ok: false, error: 'Method not allowed' })
+          return
+        }
+        try {
+          const profile = exportModelProfile()
+          const d = new Date()
+          const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+          const filename = `jackdsh-models-backup-${ymd}.json`
+
+          const body = JSON.stringify(profile, null, 2)
+          res.statusCode = 200
+          res.setHeader('content-type', 'application/json; charset=utf-8')
+          res.setHeader('content-disposition', `attachment; filename="${filename}"`)
+          res.setHeader('cache-control', 'no-store')
+          res.setHeader('content-length', String(Buffer.byteLength(body)))
+          res.end(body)
+        } catch (err) {
+          sendJson(res, 500, { ok: false, error: err.message })
+        }
+      },
+    }), 'dsh-plugin-dashboard: export route')
+
+    // 4. 导入模型与凭据全量配置包
+    ctx.effect(() => webServer.register({
+      kind: 'exact',
+      path: IMPORT_ROUTE,
+      handler: async (req, res) => {
+        if (rejectUnlessLocal(req, res)) return
+        if (req.method !== 'POST') {
+          res.setHeader('allow', 'POST')
+          sendJson(res, 405, { ok: false, error: 'Method not allowed' })
+          return
+        }
+        try {
+          const payload = await readJsonBody(req, IMPORT_BODY_LIMIT)
+          const result = importModelProfile(payload)
+          sendJson(res, 200, result)
+        } catch (err) {
+          sendJson(res, 400, { ok: false, error: err.message })
+        }
+      },
+    }), 'dsh-plugin-dashboard: import route')
   })
 }

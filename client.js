@@ -3,7 +3,7 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const module = { exports: {} }
     const React = require('react')
-    const { useState, useEffect, useMemo, createElement: h } = React
+    const { useState, useEffect, useMemo, useRef, createElement: h } = React
 
     const inject = ['slots']
 
@@ -99,6 +99,54 @@ window.__ModuleLoader__.load({
         pluginName: '',
         actionText: '',
       })
+
+      // 模型与凭据随身迁移状态
+      const fileInputRef = useRef(null)
+      const [isImporting, setIsImporting] = useState(false)
+      const [importNotice, setImportNotice] = useState(null)
+
+      const handleExportProfile = () => {
+        const a = document.createElement('a')
+        a.href = '/api/jack-plugins/export-profile'
+        a.download = ''
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      }
+
+      const handleTriggerImport = () => {
+        if (fileInputRef.current) {
+          fileInputRef.current.click()
+        }
+      }
+
+      const handleFileSelected = async (e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setIsImporting(true)
+        setImportNotice(null)
+        try {
+          const text = await file.text()
+          const payload = JSON.parse(text)
+          const res = await fetch('/api/jack-plugins/import-profile', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          const result = await res.json()
+          if (result && result.ok) {
+            setImportNotice({ error: false, text: `✅ ${result.message || '导入成功'}！页面将在 2 秒后自动刷新...` })
+            setTimeout(() => window.location.reload(), 2000)
+          } else {
+            setImportNotice({ error: true, text: `❌ 导入失败: ${result.error || '未知错误'}` })
+          }
+        } catch (err) {
+          setImportNotice({ error: true, text: `❌ 解析或导入异常: ${err.message}` })
+        } finally {
+          setIsImporting(false)
+          if (fileInputRef.current) fileInputRef.current.value = ''
+        }
+      }
 
       useEffect(() => {
         try {
@@ -433,6 +481,99 @@ window.__ModuleLoader__.load({
               },
               copied ? '✓ 已复制诊断信息' : '复制系统与插件信息'
             )
+          )
+        ),
+
+        // 2.5 模型与凭据随身迁移卡片（通用导入/导出）
+        h(
+          'div',
+          {
+            style: {
+              background: 'linear-gradient(135deg, rgba(240, 253, 250, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%)',
+              border: '1px solid #ccfbf1',
+              borderRadius: '12px',
+              padding: '14px 18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              flexWrap: 'wrap',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+            },
+          },
+          h(
+            'div',
+            { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
+            h('span', { style: { fontSize: '24px' } }, '📦'),
+            h(
+              'div',
+              null,
+              h('div', { style: { fontSize: '14px', fontWeight: '600', color: '#0f766e' } }, '全量模型与授权随身迁移 (DeepSeek / Grok / Gemini)'),
+              h('div', { style: { fontSize: '12px', color: '#64748b', marginTop: '3px' } }, '在此处一键导出私密配置包（几十KB），换新电脑或在网吧打开空客户端时一键导入，瞬间满血复活。'),
+              importNotice
+                ? h(
+                    'div',
+                    {
+                      style: {
+                        marginTop: '6px',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        color: importNotice.error ? '#dc2626' : '#16a34a',
+                      },
+                    },
+                    importNotice.text
+                  )
+                : null
+            )
+          ),
+          h(
+            'div',
+            { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+            h(
+              'button',
+              {
+                style: {
+                  background: '#0d9488',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '7px 16px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(13, 148, 136, 0.25)',
+                  transition: 'background-color 0.15s',
+                },
+                onClick: handleExportProfile,
+              },
+              '⬇️ 导出配置包'
+            ),
+            h(
+              'button',
+              {
+                style: {
+                  background: '#ffffff',
+                  color: '#0f766e',
+                  border: '1px solid #99f6e4',
+                  padding: '7px 16px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: isImporting ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                },
+                disabled: isImporting,
+                onClick: handleTriggerImport,
+              },
+              isImporting ? '正在恢复...' : '⬆️ 导入配置包'
+            ),
+            h('input', {
+              type: 'file',
+              accept: '.json',
+              ref: fileInputRef,
+              style: { display: 'none' },
+              onChange: handleFileSelected,
+            })
           )
         ),
 

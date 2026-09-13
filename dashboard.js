@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, copyFileSync, renameSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, copyFileSync, renameSync, readdirSync, chmodSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -455,5 +455,104 @@ export function togglePluginState(pluginId, targetEnabled, env = process.env) {
     entryId,
     enabled: targetEnabled,
     needReload: true,
+  }
+}
+
+export const MODEL_CONFIG_FILES = [
+  '.credentials.yaml',
+  'grok-oauth.json',
+  'gemini-oauth.json',
+  'gemini-oauth-models.json',
+  'settings.yaml',
+]
+
+/**
+ * 导出当前环境的全量模型与授权配置包
+ */
+export function exportModelProfile(env = process.env) {
+  const dshHome = resolveDshHome(env)
+  const files = {}
+  let fileCount = 0
+
+  for (const filename of MODEL_CONFIG_FILES) {
+    const fullPath = join(dshHome, filename)
+    if (existsSync(fullPath)) {
+      try {
+        files[filename] = readFileSync(fullPath, 'utf8')
+        fileCount++
+      } catch (err) {
+        console.warn(`[dsh-plugin-dashboard] 导出文件失败: ${filename}`, err.message)
+      }
+    }
+  }
+
+  return {
+    schema: 'jackdsh-model-profile/v1',
+    exportedAt: new Date().toISOString(),
+    sourcePlatform: process.platform,
+    dshHomeBasename: dshHome.split(/[/\\]/).pop() || 'dsh-home',
+    fileCount,
+    files,
+  }
+}
+
+/**
+ * 导入全量模型与授权配置包并安全写盘
+ */
+export function importModelProfile(payload, env = process.env) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('导入数据格式无效，必须是 JSON 对象')
+  }
+
+  if (payload.schema !== 'jackdsh-model-profile/v1') {
+    throw new Error('不支持的配置包版本格式，要求 jackdsh-model-profile/v1')
+  }
+
+  if (!payload.files || typeof payload.files !== 'object') {
+    throw new Error('配置包中缺少有效的 files 文件字典')
+  }
+
+  const dshHome = resolveDshHome(env)
+  const allowedFiles = new Set(MODEL_CONFIG_FILES)
+  const restored = []
+
+  for (const [filename, content] of Object.entries(payload.files)) {
+    // 严格安全白名单过滤，杜绝路径穿越与恶意覆盖
+    if (!allowedFiles.has(filename)) {
+      continue
+    }
+
+    if (typeof content !== 'string') {
+      continue
+    }
+
+    const targetPath = join(dshHome, filename)
+
+    // 如果原文件存在，先做 .bak-pre-import 备份
+    try {
+      if (existsSync(targetPath)) {
+        copyFileSync(targetPath, `${targetPath}.bak-pre-import`)
+      }
+    } catch {}
+
+    // 原子写入（模式 0o600 严格私有权限）
+    const tmpPath = `${targetPath}.tmp-import-${Date.now()}`
+    writeFileSync(tmpPath, content, { encoding: 'utf8', mode: 0o600 })
+    renameSync(tmpPath, targetPath)
+    try {
+      chmodSync(targetPath, 0o600)
+    } catch {}
+    restored.push(filename)
+  }
+
+  if (restored.length === 0) {
+    throw new Error('配置包中未包含任何有效的模型配置文件（如 .credentials.yaml、grok-oauth.json 等）')
+  }
+
+  return {
+    ok: true,
+    restored,
+    count: restored.length,
+    message: `成功恢复 ${restored.length} 个模型与授权配置文件`,
   }
 }
