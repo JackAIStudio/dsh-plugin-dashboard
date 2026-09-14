@@ -2,6 +2,10 @@ import { existsSync, readFileSync, writeFileSync, copyFileSync, renameSync, read
 import { join, resolve, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -554,5 +558,111 @@ export function importModelProfile(payload, env = process.env) {
     restored,
     count: restored.length,
     message: `成功恢复 ${restored.length} 个模型与授权配置文件`,
+  }
+}
+
+async function runGit(cwd, args, timeout = 3000) {
+  try {
+    const { stdout } = await execFileAsync('git', args, {
+      cwd,
+      timeout,
+      encoding: 'utf8',
+      env: { ...process.env, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' },
+    })
+    return { ok: true, stdout: stdout.trim() }
+  } catch (err) {
+    return { ok: false, error: err.message, stdout: '' }
+  }
+}
+
+/**
+ * 收集自研插件生态的 Git 同步状态（支持 --fetch 远程探查）
+ */
+export async function collectGitStatus(options = {}) {
+  const localPluginsDir = resolve(__dirname, '../')
+  if (!existsSync(localPluginsDir)) {
+    return { ok: false, error: '自研插件目录不存在', summary: {}, plugins: {} }
+  }
+
+  const entries = readdirSync(localPluginsDir, { withFileTypes: true })
+  const pluginDirs = entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+    .map((e) => ({ name: e.name, dir: join(localPluginsDir, e.name) }))
+
+  const tasks = pluginDirs.map(async ({ name, dir }) => {
+    const gitDir = join(dir, '.git')
+    if (!existsSync(gitDir)) {
+      return { name, isGit: false, synced: false }
+    }
+
+    if (options.fetch) {
+      await runGit(dir, ['fetch', '--quiet'], 5000)
+    }
+
+    const branchRes = await runGit(dir, ['rev-parse', '--abbrev-ref', 'HEAD'])
+    const branch = branchRes.ok ? branchRes.stdout : 'unknown'
+
+    const statusRes = await runGit(dir, ['status', '--porcelain'])
+    const dirtyLines = statusRes.ok && statusRes.stdout
+      ? statusRes.stdout.split('\n').filter(Boolean)
+      : []
+    const isDirty = dirtyLines.length > 0
+    const dirtyFiles = dirtyLines.slice(0, 3).map((l) => l.trim())
+
+    let ahead = 0
+    let behind = 0
+    const upstreamRes = await runGit(dir, ['rev-parse', '--abbrev-ref', '@{u}'])
+    if (upstreamRes.ok && upstreamRes.stdout) {
+      const revCountRes = await runGit(dir, ['rev-list', '--left-right', '--count', '@{u}...HEAD'])
+      if (revCountRes.ok) {
+        const parts = revCountRes.stdout.split(/\s+/)
+        if (parts.length >= 2) {
+          behind = parseInt(parts[0], 10) || 0
+          ahead = parseInt(parts[1], 10) || 0
+        }
+      }
+    }
+
+    const synced = !isDirty && ahead === 0 && behind === 0 && branch === 'main'
+
+    return {
+      name,
+      isGit: true,
+      branch,
+      isDirty,
+      dirtyCount: dirtyLines.length,
+      dirtyFiles,
+      ahead,
+      behind,
+      synced,
+    }
+  })
+
+  const results = await Promise.all(tasks)
+  const pluginsMap = {}
+  let syncedCount = 0
+  let dirtyCount = 0
+  let aheadCount = 0
+  let behindCount = 0
+
+  for (const item of results) {
+    pluginsMap[item.name] = item
+    if (item.synced) syncedCount++
+    if (item.isDirty) dirtyCount++
+    if (item.ahead > 0) aheadCount++
+    if (item.behind > 0) behindCount++
+  }
+
+  return {
+    ok: true,
+    total: results.length,
+    summary: {
+      syncedCount,
+      dirtyCount,
+      aheadCount,
+      behindCount,
+      isAllClean: dirtyCount === 0 && aheadCount === 0,
+    },
+    plugins: pluginsMap,
   }
 }

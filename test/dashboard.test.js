@@ -4,6 +4,7 @@ import {
   applyPluginEnablementToPatch,
   parsePluginEnablementFromPatch,
   collectDashboardState,
+  collectGitStatus,
   readDshCoreVersion,
   resolvePluginEntryId,
 } from '../dashboard.js'
@@ -66,4 +67,13 @@ test('collectDashboardState builds clean structure with entryId', () => {
   assert.equal(sidebar.displayName, '增强侧边栏')
   assert.equal(sidebar.entryId, 'better-sidebar')
   assert.match(sidebar.version, /^\d+\.\d+\.\d+/)
+})
+
+test('collectGitStatus returns structured git summary', async () => {
+  const gitData = await collectGitStatus()
+  assert.equal(gitData.ok, true)
+  assert.ok(gitData.total > 0)
+  assert.ok(typeof gitData.summary.syncedCount === 'number')
+  assert.ok(gitData.plugins['dsh-plugin-dashboard'])
+  assert.equal(gitData.plugins['dsh-plugin-dashboard'].isGit, true)
 })

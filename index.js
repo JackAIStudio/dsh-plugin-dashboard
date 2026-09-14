@@ -1,10 +1,11 @@
 import { Buffer } from 'node:buffer'
-import { collectDashboardState, togglePluginState, exportModelProfile, importModelProfile } from './dashboard.js'
+import { collectDashboardState, collectGitStatus, togglePluginState, exportModelProfile, importModelProfile } from './dashboard.js'
 
 export const name = 'dsh-plugin-dashboard'
 export const inject = ['webServer']
 
 const STATUS_ROUTE = '/api/jack-plugins/status'
+const GIT_STATUS_ROUTE = '/api/jack-plugins/git-status'
 const TOGGLE_ROUTE = '/api/jack-plugins/toggle'
 const EXPORT_ROUTE = '/api/jack-plugins/export-profile'
 const IMPORT_ROUTE = '/api/jack-plugins/import-profile'
@@ -82,6 +83,28 @@ export function apply(ctx) {
         }
       },
     }), 'dsh-plugin-dashboard: status route')
+
+    // 1.1 获取自研插件生态 Git 同步状态
+    ctx.effect(() => webServer.register({
+      kind: 'exact',
+      path: GIT_STATUS_ROUTE,
+      handler: async (req, res) => {
+        if (rejectUnlessLocal(req, res)) return
+        if (req.method !== 'GET') {
+          res.setHeader('allow', 'GET')
+          sendJson(res, 405, { ok: false, error: 'Method not allowed' })
+          return
+        }
+        try {
+          const url = new URL(req.url || '/', 'http://127.0.0.1')
+          const doFetch = url.searchParams.get('fetch') === 'true' || url.searchParams.get('fetch') === '1'
+          const gitData = await collectGitStatus({ fetch: doFetch })
+          sendJson(res, 200, gitData)
+        } catch (err) {
+          sendJson(res, 500, { ok: false, error: err.message })
+        }
+      },
+    }), 'dsh-plugin-dashboard: git-status route')
 
     // 2. 切换插件启用/禁用
     ctx.effect(() => webServer.register({
