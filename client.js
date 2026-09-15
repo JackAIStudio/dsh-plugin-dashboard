@@ -119,6 +119,20 @@ window.__ModuleLoader__.load({
           -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7.5 4.27 9 5.15'/%3E%3Cpath d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z'/%3E%3Cpath d='m3.3 7 8.7 5 8.7-5'/%3E%3Cpath d='M12 22V12'/%3E%3C/svg%3E") center / contain no-repeat !important;
           mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7.5 4.27 9 5.15'/%3E%3Cpath d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z'/%3E%3Cpath d='m3.3 7 8.7 5 8.7-5'/%3E%3Cpath d='M12 22V12'/%3E%3C/svg%3E") center / contain no-repeat !important;
         }
+
+        /* 设置左侧导航的【桌面通知】专属铃铛图标 */
+        [data-jackdsh-notification-settings-nav] > svg:first-child {
+          display: none !important;
+        }
+        [data-jackdsh-notification-settings-nav]::before {
+          content: "" !important;
+          flex: none !important;
+          width: 16px !important;
+          height: 16px !important;
+          background: currentColor !important;
+          -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E") center / contain no-repeat !important;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E") center / contain no-repeat !important;
+        }
       `
     }
 
@@ -1884,13 +1898,17 @@ window.__ModuleLoader__.load({
           }
         }
 
-        // 2. 同步设置弹窗左侧导航的【配置迁移】图标
+        // 2. 同步设置弹窗左侧导航的【配置迁移】与【桌面通知】图标
         const navButtons = document.querySelectorAll('[role="dialog"] nav button')
         for (const b of navButtons) {
           const text = b.textContent ? b.textContent.trim() : ''
           if (text === '配置迁移') {
             if (!b.hasAttribute('data-jackdsh-migration-settings-nav')) {
               b.setAttribute('data-jackdsh-migration-settings-nav', '')
+            }
+          } else if (text === '桌面通知' || text.includes('桌面通知')) {
+            if (!b.hasAttribute('data-jackdsh-notification-settings-nav')) {
+              b.setAttribute('data-jackdsh-notification-settings-nav', '')
             }
           }
         }
@@ -1907,7 +1925,230 @@ window.__ModuleLoader__.load({
         document.querySelectorAll('[data-jackdsh-migration-settings-nav]').forEach((el) => {
           el.removeAttribute('data-jackdsh-migration-settings-nav')
         })
+        document.querySelectorAll('[data-jackdsh-notification-settings-nav]').forEach((el) => {
+          el.removeAttribute('data-jackdsh-notification-settings-nav')
+        })
       }
+    }
+
+    // --------------------------------------------------------------------------
+    // 独立设置分类：任务提醒与未读角标（极简沉静设计）
+    // --------------------------------------------------------------------------
+    function NotificationSettingsSection() {
+      ensureStyles()
+
+      const [statusNotice, setStatusNotice] = useState(null)
+      const [testCount, setTestCount] = useState(1)
+      const isJackDsh = typeof window !== 'undefined' && Boolean(window.jackdshNative)
+
+      const handleTestBadge = () => {
+        setStatusNotice(null)
+        try {
+          if (isJackDsh && window.jackdshNative?.setBadge) {
+            window.jackdshNative.setBadge(testCount)
+          } else if (typeof navigator !== 'undefined' && 'setAppBadge' in navigator) {
+            navigator.setAppBadge(testCount).catch(() => {})
+          }
+          setStatusNotice({
+            type: 'success',
+            text: `✅ 已在程序坞图标右上角打上未读红点 (${testCount})！请查看屏幕下方 Dock 栏。点回窗口即可自动清零。`,
+          })
+          setTestCount((prev) => prev + 1)
+        } catch (err) {
+          setStatusNotice({
+            type: 'error',
+            text: `❌ 设置角标失败: ${err.message}`,
+          })
+        }
+      }
+
+      const handleClearBadge = () => {
+        try {
+          if (isJackDsh && window.jackdshNative?.clearBadge) {
+            window.jackdshNative.clearBadge()
+          } else if (typeof navigator !== 'undefined' && 'clearAppBadge' in navigator) {
+            navigator.clearAppBadge().catch(() => {})
+          }
+          setStatusNotice({
+            type: 'info',
+            text: '🧹 已清空程序坞未读红点。',
+          })
+          setTestCount(1)
+        } catch (err) {
+          setStatusNotice({
+            type: 'error',
+            text: `❌ 清空角标失败: ${err.message}`,
+          })
+        }
+      }
+
+      return h(
+        'div',
+        {
+          style: {
+            boxSizing: 'border-box',
+            width: '100%',
+            maxWidth: '760px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '18px',
+            paddingBottom: '32px',
+          },
+        },
+        // 头部标题与描述
+        h(
+          'div',
+          { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+          h(
+            'div',
+            { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+            h('h2', { style: { margin: 0, fontSize: '20px', fontWeight: '700', color: '#0f172a' } }, '任务提醒与未读角标'),
+            h(
+              'span',
+              {
+                style: {
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  padding: '2px 8px',
+                  background: '#ecfdf5',
+                  color: '#15803d',
+                  borderRadius: '999px',
+                  border: '1px solid #86efac',
+                },
+              },
+              '极简沉静'
+            )
+          ),
+          h(
+            'p',
+            { style: { margin: 0, fontSize: '13px', color: '#64748b', lineHeight: '1.6' } },
+            '遵循极简沉静哲学：人在电脑前切出时播放清脆提示音，人离开电脑时保留程序坞红底白字未读角标。不乱跳图标、不弹系统横幅打扰，免系统授权、开箱即用。'
+          )
+        ),
+
+        // 状态反馈 Banner
+        statusNotice &&
+          h(
+            'div',
+            {
+              style: {
+                padding: '12px 16px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '500',
+                background: statusNotice.type === 'error' ? '#fef2f2' : (statusNotice.type === 'info' ? '#eff6ff' : '#f0fdf4'),
+                color: statusNotice.type === 'error' ? '#991b1b' : (statusNotice.type === 'info' ? '#1d4ed8' : '#166534'),
+                border: `1px solid ${statusNotice.type === 'error' ? '#fecaca' : (statusNotice.type === 'info' ? '#bfdbfe' : '#bbf7d0')}`,
+              },
+            },
+            statusNotice.text
+          ),
+
+        // 1. 测试未读角标卡片
+        h(
+          'div',
+          {
+            className: 'jpd-card-hover',
+            style: {
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '14px',
+              padding: '22px 24px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '20px',
+              flexWrap: 'wrap',
+            },
+          },
+          h(
+            'div',
+            { style: { display: 'flex', alignItems: 'flex-start', gap: '16px', flex: '1 1 340px' } },
+            h('span', { style: { fontSize: '32px', lineHeight: 1 } }, '🔴'),
+            h(
+              'div',
+              null,
+              h('div', { style: { fontSize: '15px', fontWeight: '600', color: '#0f172a' } }, '测试程序坞未读红点'),
+              h(
+                'div',
+                { style: { fontSize: '13px', color: '#64748b', marginTop: '4px', lineHeight: '1.5' } },
+                '在 Mac 程序坞（Dock）图标右上角点亮原生红底白字数字标；切回窗口时自动清空。'
+              )
+            )
+          ),
+          h(
+            'div',
+            { style: { display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 } },
+            h(
+              'button',
+              {
+                style: {
+                  background: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(239, 68, 68, 0.25)',
+                  transition: 'background-color 0.15s',
+                },
+                onClick: handleTestBadge,
+              },
+              `🔴 点亮红点 (${testCount})`
+            ),
+            h(
+              'button',
+              {
+                style: {
+                  background: '#ffffff',
+                  color: '#64748b',
+                  border: '1px solid #cbd5e1',
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                },
+                onClick: handleClearBadge,
+              },
+              '清空红点'
+            )
+          )
+        ),
+
+        // 2. 沉静体验特性介绍卡片
+        h(
+          'div',
+          {
+            style: {
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '14px',
+              padding: '20px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            },
+          },
+          h(
+            'div',
+            { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+            h('span', { style: { fontSize: '16px' } }, '✨'),
+            h('span', { style: { fontSize: '14px', fontWeight: '600', color: '#1e293b' } }, '两重感知通道，100% 覆盖')
+          ),
+          h(
+            'div',
+            { style: { fontSize: '12.5px', color: '#475569', lineHeight: '1.7', display: 'flex', flexDirection: 'column', gap: '8px' } },
+            h('div', null, '🔊 ', h('strong', { style: { color: '#0f172a' } }, '轻音知当下：'), '切到其他窗口工作时，任务完成或等待输入会自动播放短促提示音，无需眼睛盯屏。'),
+            h('div', null, '🔴 ', h('strong', { style: { color: '#0f172a' } }, '红点知过往：'), '人离开电脑或静音时，任务完成会在程序坞图标保留红点数字；回到电脑扫一眼即知。'),
+            h('div', null, '🍃 ', h('strong', { style: { color: '#15803d' } }, '零打扰免授权：'), '彻底移除了弹跳动画与横幅弹窗，无需向 macOS 申请任何系统通知权限，开箱即用。')
+          )
+        )
+      )
     }
 
     function apply(ctx) {
@@ -1928,6 +2169,13 @@ window.__ModuleLoader__.load({
         label: () => '配置迁移',
       }
 
+      const notificationSectionMeta = {
+        name: 'settings.section',
+        id: 'jackdsh-notifications',
+        order: 14.2,
+        label: () => '桌面通知',
+      }
+
       const registerAll = (slots) => {
         if (!slots) return
 
@@ -1941,7 +2189,8 @@ window.__ModuleLoader__.load({
           })
           slots.inject('settings.section', () => {
             try {
-              return slots.register(migrationSectionMeta, MigrationSection)
+              slots.register(migrationSectionMeta, MigrationSection)
+              slots.register(notificationSectionMeta, NotificationSettingsSection)
             } catch {
               return () => {}
             }
@@ -1950,6 +2199,7 @@ window.__ModuleLoader__.load({
           try {
             slots.register(tabMeta, DashboardTab)
             slots.register(migrationSectionMeta, MigrationSection)
+            slots.register(notificationSectionMeta, NotificationSettingsSection)
           } catch {}
         }
       }

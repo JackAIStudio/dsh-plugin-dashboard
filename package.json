@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-dashboard",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "JackDSH 自研插件与版本大盘：展示 DSH 官方底座与自研插件版本矩阵，支持免命令行无感热开关与一键诊断复制。",
   "type": "module",
