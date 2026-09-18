@@ -574,6 +574,27 @@ export function importModelProfile(payload, env = process.env) {
     restored.push(filename)
   }
 
+  // 自动将配置中的代理同步写入 cordis.patch.yml，确保全新机器导入后网络代理一键生效
+  try {
+    const settingsPath = join(dshHome, 'settings.yaml')
+    if (existsSync(settingsPath)) {
+      const settingsContent = readFileSync(settingsPath, 'utf8')
+      const proxyMatch = settingsContent.match(/llm-gemini-oauth:[\s\S]*?proxy:\s*['"]?([^'"\r\n\s]+)/)
+      const geminiProxy = proxyMatch ? proxyMatch[1].trim() : ''
+      if (geminiProxy) {
+        const patchPath = join(dshHome, 'profiles', 'web', 'cordis.patch.yml')
+        if (existsSync(patchPath)) {
+          let patchRaw = readFileSync(patchPath, 'utf8')
+          if (!patchRaw.includes('id: llm-gemini-oauth')) {
+            const block = `\n# Gemini 插件代理设置（由配置迁移自动同步）\n- id: llm-gemini-oauth\n  config:\n    proxy: ${geminiProxy}\n`
+            patchRaw = patchRaw.trim() ? `${patchRaw.trimEnd()}\n${block}` : block
+            writeFileSync(patchPath, patchRaw, 'utf8')
+          }
+        }
+      }
+    }
+  } catch {}
+
   if (restored.length === 0) {
     throw new Error('配置包中未包含任何有效的模型配置文件（如 .credentials.yaml、grok-oauth.json 等）')
   }
