@@ -54,19 +54,24 @@ test('applyPluginEnablementToPatch writes correct entryId and cleans legacy dirt
   assert.equal(parsePluginEnablementFromPatch(enabled, 'dsh-better-sidebar'), true)
 })
 
-test('collectDashboardState builds clean structure with entryId', () => {
+test('collectDashboardState builds clean structure with entryId and filters deprecated plugins', () => {
   const state = collectDashboardState()
   assert.ok(state.system)
   assert.ok(state.system.dshCoreVersion)
   assert.ok(Array.isArray(state.plugins))
   assert.ok(state.plugins.length > 0)
 
+  // 活跃自研插件正常展示
+  const today = state.plugins.find(p => p.id === 'dsh-today')
+  assert.ok(today)
+  assert.equal(today.isOwn, true)
+  assert.equal(today.displayName, '今日按天工作区')
+  assert.equal(today.entryId, 'dsh-today')
+  assert.match(today.version, /^\d+\.\d+\.\d+/)
+
+  // 废弃插件在未被 profile 显式加载时不出现在大盘列表中
   const sidebar = state.plugins.find(p => p.id === 'dsh-better-sidebar')
-  assert.ok(sidebar)
-  assert.equal(sidebar.isOwn, true)
-  assert.equal(sidebar.displayName, '增强侧边栏')
-  assert.equal(sidebar.entryId, 'better-sidebar')
-  assert.match(sidebar.version, /^\d+\.\d+\.\d+/)
+  assert.equal(sidebar, undefined)
 })
 
 test('collectGitStatus returns structured git summary', async () => {

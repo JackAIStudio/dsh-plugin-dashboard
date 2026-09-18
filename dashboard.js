@@ -19,8 +19,9 @@ export const OWN_PLUGIN_META = {
   },
   'dsh-better-sidebar': {
     name: '增强侧边栏',
-    description: '集成多终端、浏览器预览、会话分屏、文件树与全局运行配置。',
+    description: '集成多终端、浏览器预览、会话分屏、文件树与全局运行配置（已由官方原生侧栏平替，当前版本废弃）。',
     isOwn: true,
+    deprecated: true,
     entryId: 'better-sidebar', // 关键：Cordis 实例真实 ID 为 better-sidebar
   },
   'dsh-session-navigator': {
@@ -101,10 +102,23 @@ export const OWN_PLUGIN_META = {
     isOwn: true,
     entryId: 'dsh-web-restart',
   },
+  'dsh-paste-path': {
+    name: '智能路径拖拽与粘贴',
+    description: '智能拖拽目录与 macOS 应用包生成绝对路径，普通文件放行官方多模态。',
+    isOwn: true,
+    entryId: 'dsh-paste-path',
+  },
+  'dsh-autostart': {
+    name: '跨平台开机自启',
+    description: '支持 macOS LaunchAgent、Windows 与 Linux 的开机无感自启动设置。',
+    isOwn: true,
+    entryId: 'dsh-autostart',
+  },
   'dsh-browser-attach': {
     name: '浏览器调试附加',
-    description: '支持附加外部 Chrome / Edge 浏览器并执行自动化交互。',
+    description: '支持附加外部 Chrome / Edge 浏览器并执行自动化交互（已由 BrowserSkill 平替，当前版本废弃）。',
     isOwn: true,
+    deprecated: true,
     entryId: 'dsh-browser-attach',
   },
 }
@@ -337,17 +351,28 @@ export function collectDashboardState(env = process.env) {
   const nodeModulesDir = join(profileDir, 'node_modules')
   const localPluginsDir = resolve(__dirname, '../')
 
-  // 汇集要扫描的插件 ID 集合（优先包含已知自研插件，再包含 profile 里声明的插件）
-  const pluginIds = new Set(Object.keys(OWN_PLUGIN_META))
+  // 汇集要扫描的插件 ID 集合（优先包含已知未废弃自研插件，再包含 profile 里声明的插件）
+  const pluginIds = new Set()
+  for (const [id, meta] of Object.entries(OWN_PLUGIN_META)) {
+    if (!meta.deprecated) {
+      pluginIds.add(id)
+    }
+  }
 
   if (manifest.dependencies) {
     for (const k of Object.keys(manifest.dependencies)) {
-      if (!k.startsWith('@deepseek-ai/')) pluginIds.add(k)
+      if (!k.startsWith('@deepseek-ai/')) {
+        const meta = OWN_PLUGIN_META[k]
+        if (!meta?.deprecated) pluginIds.add(k)
+      }
     }
   }
   if (manifest.dsh?.profile?.bundles) {
     for (const b of manifest.dsh.profile.bundles) {
-      if (!b.startsWith('@deepseek-ai/')) pluginIds.add(b)
+      if (!b.startsWith('@deepseek-ai/')) {
+        const meta = OWN_PLUGIN_META[b]
+        if (!meta?.deprecated) pluginIds.add(b)
+      }
     }
   }
 
@@ -587,6 +612,7 @@ export async function collectGitStatus(options = {}) {
   const entries = readdirSync(localPluginsDir, { withFileTypes: true })
   const pluginDirs = entries
     .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+    .filter((e) => !OWN_PLUGIN_META[e.name]?.deprecated)
     .map((e) => ({ name: e.name, dir: join(localPluginsDir, e.name) }))
 
   const tasks = pluginDirs.map(async ({ name, dir }) => {
