@@ -1941,18 +1941,46 @@ window.__ModuleLoader__.load({
       const [testCount, setTestCount] = useState(1)
       const isJackDsh = typeof window !== 'undefined' && Boolean(window.jackdshNative)
 
-      const handleTestBadge = () => {
+      const handleTestBadge = async () => {
         setStatusNotice(null)
         try {
-          if (isJackDsh && window.jackdshNative?.setBadge) {
-            window.jackdshNative.setBadge(testCount)
-          } else if (typeof navigator !== 'undefined' && 'setAppBadge' in navigator) {
-            navigator.setAppBadge(testCount).catch(() => {})
+          let permission = typeof Notification !== 'undefined' ? Notification.permission : 'granted'
+          if (permission === 'default' && typeof Notification !== 'undefined' && typeof Notification.requestPermission === 'function') {
+            try {
+              permission = await Notification.requestPermission()
+            } catch {}
           }
-          setStatusNotice({
-            type: 'success',
-            text: `✅ 已在程序坞图标右上角打上未读红点 (${testCount})！请查看屏幕下方 Dock 栏。点回窗口即可自动清零。`,
-          })
+
+          if (window.__dshAppBadge?.set) {
+            // 保护 60 秒，测试红点保持点亮，不被前台自动抹去
+            window.__dshAppBadge.set(testCount, 60000)
+          } else {
+            if (isJackDsh && window.jackdshNative?.setBadge) {
+              window.jackdshNative.setBadge(testCount)
+            } else if (typeof navigator !== 'undefined' && 'setAppBadge' in navigator) {
+              await navigator.setAppBadge(testCount).catch(() => {})
+            }
+            if (typeof fetch === 'function') {
+              fetch('/dsh-app-badge/set', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ count: testCount, source: 'manual' }),
+              }).catch(() => {})
+            }
+          }
+
+          const isDenied = permission === 'denied'
+          if (isDenied && !isJackDsh) {
+            setStatusNotice({
+              type: 'error',
+              text: `⚠️ 浏览器通知权限当前被禁止。Chrome 需开启通知权限以在 Mac 程序坞 (Dock) 点亮数字红点。请在浏览器地址栏左侧将“通知”设为“允许”。`,
+            })
+          } else {
+            setStatusNotice({
+              type: 'success',
+              text: `✅ 已在程序坞图标右上角点亮红点 (${testCount})！红点已锁定保持，方便观察；点击旁边“清空红点”可随时复位。`,
+            })
+          }
           setTestCount((prev) => prev + 1)
         } catch (err) {
           setStatusNotice({
@@ -1964,10 +1992,21 @@ window.__ModuleLoader__.load({
 
       const handleClearBadge = () => {
         try {
-          if (isJackDsh && window.jackdshNative?.clearBadge) {
-            window.jackdshNative.clearBadge()
-          } else if (typeof navigator !== 'undefined' && 'clearAppBadge' in navigator) {
-            navigator.clearAppBadge().catch(() => {})
+          if (window.__dshAppBadge?.clear) {
+            window.__dshAppBadge.clear()
+          } else {
+            if (isJackDsh && window.jackdshNative?.clearBadge) {
+              window.jackdshNative.clearBadge()
+            } else if (typeof navigator !== 'undefined' && 'clearAppBadge' in navigator) {
+              navigator.clearAppBadge().catch(() => {})
+            }
+            if (typeof fetch === 'function') {
+              fetch('/dsh-app-badge/clear', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ source: 'manual_clear' }),
+              }).catch(() => {})
+            }
           }
           setStatusNotice({
             type: 'info',
@@ -2073,7 +2112,7 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { style: { fontSize: '13px', color: '#64748b', marginTop: '4px', lineHeight: '1.5' } },
-                '在 Mac 程序坞（Dock）图标右上角点亮原生红底白字数字标；切回窗口时自动清空。'
+                '在 Mac 程序坞（Dock）图标右上角点亮原生红底白字数字标；测试期间红点锁定保持，点击“清空红点”即可复位。'
               )
             )
           ),
@@ -2083,6 +2122,7 @@ window.__ModuleLoader__.load({
             h(
               'button',
               {
+                'data-test-badge-btn': 'true',
                 style: {
                   background: '#ef4444',
                   color: '#ffffff',
